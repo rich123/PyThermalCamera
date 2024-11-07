@@ -55,10 +55,7 @@ cap = cv2.VideoCapture('/dev/video'+str(dev), cv2.CAP_V4L)
 #cap = cv2.VideoCapture(0)
 #pull in the video but do NOT automatically convert to RGB, else it breaks the temperature data!
 #https://stackoverflow.com/questions/63108721/opencv-setting-videocap-property-to-cap-prop-convert-rgb-generates-weird-boolean
-if isPi == True:
-	cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
-else:
-	cap.set(cv2.CAP_PROP_CONVERT_RGB, False)
+cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
 
 #256x192 General settings
 width = 256 #Sensor width
