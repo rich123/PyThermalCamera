@@ -23,6 +23,7 @@ print('r t: Record and Stop')
 print('p : Snapshot')
 print('m : Cycle through ColorMaps')
 print('u : Cycle through Temperature Units')
+print('o : Cycle through image rotation angles')
 print('h : Toggle HUD')
 
 import cv2
@@ -45,6 +46,7 @@ isPi = is_raspberrypi()
 parser = argparse.ArgumentParser()
 parser.add_argument("--device", type=int, default=0, help="Video Device number e.g. 0, use v4l2-ctl --list-devices")
 parser.add_argument("--tempunits", default='C', help="Default temperature units to display <K|C|F>")
+parser.add_argument("--rotate", type=int, default=0, help="Default rotation angle <0|90|180|270>")
 args = parser.parse_args()
 	
 if args.device:
@@ -59,6 +61,22 @@ if args.tempunits:
 		raise ValueError('Temperature units must be one of K, C or F')
 else:
 	temp_units = "C"
+
+if args.rotate:
+	if args.rotate in set([0, 90, 180, 270]):
+		rotate = args.rotate
+		if rotate == 0:
+			rotate = None
+		elif rotate == 90:
+			rotate = cv2.ROTATE_90_CLOCKWISE
+		elif rotate == 180:
+			rotate = cv2.ROTATE_180
+		elif rotate == 270:
+			rotate = cv2.ROTATE_90_COUNTERCLOCKWISE
+	else:
+		raise ValueError('Rotation value must be one of 0, 90, 180, 270.')
+else:
+	rotate = None
 
 #init video
 cap = cv2.VideoCapture('/dev/video'+str(dev), cv2.CAP_V4L)
@@ -117,6 +135,17 @@ def change_temp_units():
 	elif temp_units == 'F':
 		temp_units = 'K'
 
+def change_rotation():
+	global rotate
+	if rotate is None:
+		rotate = cv2.ROTATE_90_CLOCKWISE
+	elif rotate == cv2.ROTATE_90_CLOCKWISE:
+		rotate = cv2.ROTATE_180
+	elif rotate == cv2.ROTATE_180:
+		rotate = cv2.ROTATE_90_COUNTERCLOCKWISE
+	elif rotate == cv2.ROTATE_90_COUNTERCLOCKWISE:
+		rotate = None
+
 while(cap.isOpened()):
 	# Capture frame-by-frame
 	ret, frame = cap.read()
@@ -158,6 +187,10 @@ while(cap.isOpened()):
 		hiavg = thdata[...,0].mean()
 		loavg=loavg*256
 		avgtemp = loavg+hiavg
+
+                # rotate image, if requested
+		if not rotate is None:
+			imdata = cv2.rotate(imdata, rotate)
 
 		# Convert the real image to RGB
 		bgr = cv2.cvtColor(imdata,  cv2.COLOR_YUV2BGR_YUYV)
@@ -361,6 +394,9 @@ while(cap.isOpened()):
 
 		if keyPress == ord('u'): #u to toggle units for temperature display
 			change_temp_units()
+
+		if keyPress == ord('o'): #o to r(O)tate the image
+			change_rotation()
 
 		if keyPress == ord('q'):
 			break
