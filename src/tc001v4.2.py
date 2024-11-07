@@ -22,6 +22,7 @@ print('q w: Fullscreen Windowed (note going back to windowed does not seem to wo
 print('r t: Record and Stop')
 print('p : Snapshot')
 print('m : Cycle through ColorMaps')
+print('u : Cycle through Temperature Units')
 print('h : Toggle HUD')
 
 import cv2
@@ -43,13 +44,22 @@ isPi = is_raspberrypi()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--device", type=int, default=0, help="Video Device number e.g. 0, use v4l2-ctl --list-devices")
+parser.add_argument("--tempunits", default='C', help="Default temperature units to display <K|C|F>")
 args = parser.parse_args()
 	
 if args.device:
 	dev = args.device
 else:
 	dev = 0
-	
+
+if args.tempunits:
+	if args.tempunits in set(['K', 'k', 'C', 'c', 'F', 'f']):
+		temp_units = args.tempunits.upper()
+	else:
+		raise ValueError('Temperature units must be one of K, C or F')
+else:
+	temp_units = "C"
+
 #init video
 cap = cv2.VideoCapture('/dev/video'+str(dev), cv2.CAP_V4L)
 #cap = cv2.VideoCapture(0)
@@ -88,7 +98,24 @@ def snapshot(heatmap):
 	snaptime = time.strftime("%H:%M:%S")
 	cv2.imwrite("TC001"+now+".png", heatmap)
 	return snaptime
- 
+
+def convert_temp(temp):
+	global temp_units
+	if temp_units == "K":
+		return str(round(temp/64,2))+' K'
+	elif temp_units == "C":
+		return str(round(((temp/64)-273.15),2))+' C'
+	elif temp_units == "F":
+		return str(round(((temp/64)-273.15)*1.8+32,2))+' F'
+
+def change_temp_units():
+	global temp_units
+	if temp_units == "K":
+		temp_units = 'C'
+	elif temp_units == "C":
+		temp_units = 'F'
+	elif temp_units == 'F':
+		temp_units = 'K'
 
 while(cap.isOpened()):
 	# Capture frame-by-frame
@@ -103,10 +130,7 @@ while(cap.isOpened()):
 		lo = thdata[96][128][1]
 		#print(hi,lo)
 		lo = lo*256
-		rawtemp = hi+lo
-		#print(rawtemp)
-		temp = (rawtemp/64)-273.15
-		temp = round(temp,2)
+		temp = hi+lo
 		#print(temp)
 		#break
 
@@ -118,8 +142,6 @@ while(cap.isOpened()):
 		himax = thdata[mcol][mrow][0]
 		lomax=lomax*256
 		maxtemp = himax+lomax
-		maxtemp = (maxtemp/64)-273.15
-		maxtemp = round(maxtemp,2)
 
 		
 		#find the lowest temperature in the frame
@@ -130,18 +152,12 @@ while(cap.isOpened()):
 		himin = thdata[lcol][lrow][0]
 		lomin=lomin*256
 		mintemp = himin+lomin
-		mintemp = (mintemp/64)-273.15
-		mintemp = round(mintemp,2)
 
 		#find the average temperature in the frame
 		loavg = thdata[...,1].mean()
 		hiavg = thdata[...,0].mean()
 		loavg=loavg*256
 		avgtemp = loavg+hiavg
-		avgtemp = (avgtemp/64)-273.15
-		avgtemp = round(avgtemp,2)
-
-		
 
 		# Convert the real image to RGB
 		bgr = cv2.cvtColor(imdata,  cv2.COLOR_YUV2BGR_YUYV)
@@ -201,19 +217,19 @@ while(cap.isOpened()):
 		cv2.line(heatmap,(int(newWidth/2)+20,int(newHeight/2)),\
 		(int(newWidth/2)-20,int(newHeight/2)),(0,0,0),1) #hline
 		#show temp
-		cv2.putText(heatmap,str(temp)+' C', (int(newWidth/2)+10, int(newHeight/2)-10),\
+		cv2.putText(heatmap,convert_temp(temp), (int(newWidth/2)+10, int(newHeight/2)-10),\
 		cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0, 0, 0), 2, cv2.LINE_AA)
-		cv2.putText(heatmap,str(temp)+' C', (int(newWidth/2)+10, int(newHeight/2)-10),\
+		cv2.putText(heatmap,convert_temp(temp), (int(newWidth/2)+10, int(newHeight/2)-10),\
 		cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0, 255, 255), 1, cv2.LINE_AA)
 
 		if hud==True:
 			# display black box for our data
 			cv2.rectangle(heatmap, (0, 0),(160, 120), (0,0,0), -1)
 			# put text in the box
-			cv2.putText(heatmap,'Avg Temp: '+str(avgtemp)+' C', (10, 14),\
+			cv2.putText(heatmap,'Avg Temp: '+convert_temp(avgtemp), (10, 14),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.4,(0, 255, 255), 1, cv2.LINE_AA)
 
-			cv2.putText(heatmap,'Label Threshold: '+str(threshold)+' C', (10, 28),\
+			cv2.putText(heatmap,'Label Threshold: '+str(threshold), (10, 28),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.4,(0, 255, 255), 1, cv2.LINE_AA)
 
 			cv2.putText(heatmap,'Colormap: '+cmapText, (10, 42),\
@@ -244,18 +260,18 @@ while(cap.isOpened()):
 		if maxtemp > avgtemp+threshold:
 			cv2.circle(heatmap, (mrow*scale, mcol*scale), 5, (0,0,0), 2)
 			cv2.circle(heatmap, (mrow*scale, mcol*scale), 5, (0,0,255), -1)
-			cv2.putText(heatmap,str(maxtemp)+' C', ((mrow*scale)+10, (mcol*scale)+5),\
+			cv2.putText(heatmap,convert_temp(maxtemp), ((mrow*scale)+10, (mcol*scale)+5),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0,0,0), 2, cv2.LINE_AA)
-			cv2.putText(heatmap,str(maxtemp)+' C', ((mrow*scale)+10, (mcol*scale)+5),\
+			cv2.putText(heatmap,convert_temp(maxtemp), ((mrow*scale)+10, (mcol*scale)+5),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0, 255, 255), 1, cv2.LINE_AA)
 
 		#display floating min temp
 		if mintemp < avgtemp-threshold:
 			cv2.circle(heatmap, (lrow*scale, lcol*scale), 5, (0,0,0), 2)
 			cv2.circle(heatmap, (lrow*scale, lcol*scale), 5, (255,0,0), -1)
-			cv2.putText(heatmap,str(mintemp)+' C', ((lrow*scale)+10, (lcol*scale)+5),\
+			cv2.putText(heatmap,convert_temp(mintemp), ((lrow*scale)+10, (lcol*scale)+5),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0,0,0), 2, cv2.LINE_AA)
-			cv2.putText(heatmap,str(mintemp)+' C', ((lrow*scale)+10, (lcol*scale)+5),\
+			cv2.putText(heatmap,convert_temp(mintemp), ((lrow*scale)+10, (lcol*scale)+5),\
 			cv2.FONT_HERSHEY_SIMPLEX, 0.45,(0, 255, 255), 1, cv2.LINE_AA)
 
 		#display image
@@ -342,6 +358,9 @@ while(cap.isOpened()):
 
 		if keyPress == ord('p'): #f to finish reording
 			snaptime = snapshot(heatmap)
+
+		if keyPress == ord('u'): #u to toggle units for temperature display
+			change_temp_units()
 
 		if keyPress == ord('q'):
 			break
